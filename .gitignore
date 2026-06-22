@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local app/runtime artifacts
+.streamlit/secrets.toml
+streamlit.out.log
+streamlit.err.log
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Local model/cache/vendor artifacts
+.vendor/
+research_repos/
+artifacts/
+models/
+hf_cache/
+.cache/
+
+# Uploaded/exported data
+data/
+uploads/
+exports/
+*.jsonl
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Do not publish generated/internal documentation
+docs/

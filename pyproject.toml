@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphforge-rag"
+version = "0.1.0"
+description = "Local-first GraphRAG system with hybrid graph retrieval and HuggingFace model adapters."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "GraphRAG Workspace" }]
+dependencies = []
+
+[project.optional-dependencies]
+hf = ["accelerate>=0.30", "sentence-transformers>=3.0", "transformers>=4.51", "torch>=2.1"]
+ui = ["streamlit>=1.36", "pypdf>=4"]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["advanced_graphrag*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
