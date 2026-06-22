@@ -62,6 +62,212 @@ stage behind explicit interfaces so the in-memory stores can be replaced with
 Neo4j, FalkorDB, Kuzu, Qdrant, Milvus, LanceDB, S3, or another production
 backend without rewriting the ingestion and query orchestration layers.
 
+## Advanced Architecture Diagrams
+
+### Production Deployment Topology
+
+```mermaid
+flowchart TB
+    subgraph Client["User Surface"]
+        Browser[Browser]
+        APIClient[API / Automation Client]
+    end
+
+    subgraph App["Application Tier"]
+        Streamlit[Streamlit Workbench]
+        API[Future FastAPI Service]
+        Engine[GraphRAGEngine]
+        Jobs[Ingestion Job Runner]
+    end
+
+    subgraph ModelTier["Model Runtime"]
+        LocalLLM[Local Transformers LLM]
+        LocalEmbed[SentenceTransformers Embedder]
+        HostedLLM[OpenAI-compatible Chat Server]
+        HostedEmbed[OpenAI-compatible Embedding Server]
+    end
+
+    subgraph Storage["Storage Tier"]
+        Graph[(Graph Store)]
+        Vector[(Vector Store)]
+        Artifacts[(Artifact Store)]
+        Logs[(Structured Event Logs)]
+    end
+
+    Browser --> Streamlit
+    APIClient --> API
+    Streamlit --> Engine
+    API --> Engine
+    Streamlit --> Jobs
+    Jobs --> Engine
+
+    Engine --> LocalLLM
+    Engine --> LocalEmbed
+    Engine --> HostedLLM
+    Engine --> HostedEmbed
+
+    Engine --> Graph
+    Engine --> Vector
+    Engine --> Artifacts
+    Engine --> Logs
+
+    Graph -. production swap .-> Neo4j[Neo4j / FalkorDB / Kuzu / Neptune]
+    Vector -. production swap .-> Qdrant[Qdrant / Milvus / LanceDB / pgvector]
+    Artifacts -. production swap .-> ObjectStore[S3 / GCS / Azure Blob]
+```
+
+### Ingestion And Graph Build Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant UI as Streamlit UI
+    participant Reader as File Reader
+    participant Pipeline as IngestionPipeline
+    participant Chunker as Chunker
+    participant Extractor as LLMJsonGraphExtractor
+    participant Resolver as Entity Resolver
+    participant Community as Community Builder
+    participant Embedder as Embedding Model
+    participant Stores as Graph + Vector Stores
+    participant Logs as Event Log
+
+    User->>UI: Upload txt, md, or pdf
+    UI->>Reader: Decode file and extract text
+    Reader-->>UI: Document text + metadata
+    UI->>Pipeline: ingest(document)
+    Pipeline->>Chunker: Split into overlapping chunks
+    Chunker-->>Pipeline: Typed chunks
+    loop Each chunk
+        Pipeline->>Extractor: Extract entities and relationships
+        Extractor-->>Pipeline: JSON graph payload
+        Pipeline->>Logs: Record extraction timing/result
+    end
+    Pipeline->>Resolver: Normalize and merge entities
+    Resolver-->>Pipeline: Canonical entity ids
+    Pipeline->>Community: Build connected components
+    Community-->>Pipeline: Community records and summaries
+    Pipeline->>Embedder: Embed chunks, entities, relationships, communities
+    Embedder-->>Pipeline: Dense vectors
+    Pipeline->>Stores: Upsert graph records and vector namespaces
+    Pipeline->>Logs: Emit ingestion summary
+```
+
+### Knowledge Graph Data Model
+
+```mermaid
+erDiagram
+    DOCUMENT ||--o{ CHUNK : contains
+    DOCUMENT ||--o{ ENTITY : mentions
+    DOCUMENT ||--o{ RELATIONSHIP : supports
+    CHUNK ||--o{ ENTITY_MENTION : grounds
+    ENTITY ||--o{ ENTITY_MENTION : appears_as
+    ENTITY ||--o{ RELATIONSHIP : source
+    ENTITY ||--o{ RELATIONSHIP : target
+    COMMUNITY ||--o{ ENTITY : groups
+    COMMUNITY ||--o{ RELATIONSHIP : summarizes
+    EVIDENCE ||--|| CHUNK : cites
+    EVIDENCE ||--o{ ENTITY : includes
+    EVIDENCE ||--o{ RELATIONSHIP : includes
+
+    DOCUMENT {
+        string id
+        string title
+        string source
+        object metadata
+    }
+    CHUNK {
+        string id
+        string document_id
+        int ordinal
+        string text
+    }
+    ENTITY {
+        string id
+        string name
+        string type
+        float confidence
+    }
+    RELATIONSHIP {
+        string id
+        string source_entity_id
+        string target_entity_id
+        string predicate
+        float confidence
+    }
+    COMMUNITY {
+        string id
+        string summary
+        int entity_count
+    }
+    EVIDENCE {
+        string id
+        string kind
+        float score
+        string citation
+    }
+```
+
+### Hybrid Retrieval And Answer Generation
+
+```mermaid
+flowchart LR
+    Query[User Query] --> Planner[QueryPlanner]
+
+    Planner --> ChunkDense[Dense Chunk Search]
+    Planner --> ChunkKeyword[Keyword Chunk Search]
+    Planner --> EntityDense[Dense Entity Search]
+    Planner --> RelDense[Dense Relationship Search]
+    Planner --> PPR[Personalized PageRank]
+    Planner --> Community[Community Summary Search]
+    Planner --> Symbolic[Symbolic Graph Read]
+
+    ChunkDense --> Fusion[Reciprocal Rank Fusion]
+    ChunkKeyword --> Fusion
+    EntityDense --> Fusion
+    RelDense --> Fusion
+    PPR --> Fusion
+    Community --> Fusion
+    Symbolic --> Fusion
+
+    Fusion --> Context[Typed Context Assembler]
+    Context --> Prompt[Grounded Answer Prompt]
+    Prompt --> LLM[LLM Backend]
+    LLM --> Answer[Answer + Citations + Graph Evidence]
+
+    Context --> Audit[Evidence Trace]
+    Fusion --> Audit
+    LLM --> ModelLog[Model Call Log]
+```
+
+### Runtime Backend Selection
+
+```mermaid
+flowchart TD
+    Settings[UI Settings] --> Runtime{Model backend}
+
+    Runtime -->|Local deterministic| Hashing[HashingEmbeddingModel]
+    Runtime -->|Local deterministic| Heuristic[HeuristicLLM]
+
+    Runtime -->|HuggingFace Hub local| ST[SentenceTransformerEmbeddingModel]
+    Runtime -->|HuggingFace Hub local| Transformers[TransformersLLM]
+
+    Runtime -->|Hosted compatible| EmbHTTP[OpenAICompatibleEmbeddingModel]
+    Runtime -->|Hosted compatible| ChatHTTP[OpenAICompatibleLLM]
+
+    ST --> Cache[HF Cache / Local Snapshot]
+    Transformers --> Cache
+    EmbHTTP --> EmbEndpoint[/v1/embeddings]
+    ChatHTTP --> ChatEndpoint[/v1/chat/completions]
+
+    Cache --> Engine[GraphRAGEngine]
+    EmbEndpoint --> Engine
+    ChatEndpoint --> Engine
+    Hashing --> Engine
+    Heuristic --> Engine
+```
+
 ## Quick Start
 
 ### 1. Create an environment
