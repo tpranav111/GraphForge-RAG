@@ -258,8 +258,8 @@ flowchart TD
 
     ST --> Cache[HF Cache / Local Snapshot]
     Transformers --> Cache
-    EmbHTTP --> EmbEndpoint[/v1/embeddings]
-    ChatHTTP --> ChatEndpoint[/v1/chat/completions]
+    EmbHTTP --> EmbEndpoint["/v1/embeddings"]
+    ChatHTTP --> ChatEndpoint["/v1/chat/completions"]
 
     Cache --> Engine[GraphRAGEngine]
     EmbEndpoint --> Engine
